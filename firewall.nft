@@ -1,0 +1,105 @@
+#!/usr/sbin/nft -f
+
+# Clears the table of previous rules
+flush ruleset
+
+# The 'inet' family automatically covers ip and ip6
+table inet filter {
+
+    # Track how many packets match these rules (for debugging/statistics)
+    counter drop_invalid{}
+    counter accept_rel{}
+    counter cnt_ssh{}
+    counter cnt_ssh6{}
+
+    # Define trusted IPs allowed to connect via SSH (IPv4)
+    set allowed_ips {
+        typeof ip saddr
+        flags interval
+        auto-merge
+        elements = { 192.168.80.0/24 }  # Example: local subnet
+    }
+
+    # Define trusted IPs allowed to connect via SSH (IPv6)
+    set allowed_ips6 {
+        typeof ip6 saddr
+        flags interval
+        auto-merge
+        elements = { fe80::/64 }  # Example: link-local range
+    }
+
+    # Temporary denylist for IPv4 addresses that trigger brute-force detection
+    set denylist {
+        type ipv4_addr
+        flags dynamic, timeout
+        timeout 10m  # Block IP for 10 minutes
+    }
+
+    # Temporary denylist for IPv6 addresses
+    set denylist6 {
+        type ipv6_addr
+        flags dynamic, timeout
+        timeout 10m
+    }
+
+    # Protection against brute-force login attempts (IPv4)
+    chain BRUTE {
+        # If too many new or untracked TCP connections from same IP, add to denylist
+        ip protocol tcp ct state new, untracked limit rate over 3/minute add @denylist { ip saddr }
+        accept  # Accept connection unless blacklisted
+    }
+
+    # Protection against brute-force login attempts (IPv6)
+    chain BRUTE6 {
+        ip6 protocol tcp ct state new, untracked limit rate over 3/minute add @denylist6 { ip6 saddr }
+        accept
+    }
+
+    # Logs and drops packets that reach this point (not accepted elsewhere)
+    chain log_drops {
+        limit rate 10/second  # Prevents flooding the logs
+        log prefix "nftables drop: " flags all  # Log with a prefix
+        drop  # Drop the packet
+    }
+
+
+    chain incoming {
+        type filter hook input priority 0; policy drop;
+
+        ct state invalid counter name drop_invalid drop
+        ct state { established, related } counter name accept_rel accept
+
+        # Loopback protection (drop spoofed loopback traffic)
+        iif != lo ip daddr 127.0.0.1/8 counter drop  # Only allow 127.0.0.1 on lo interface
+        iif != lo ip6 daddr ::1/128 counter drop     # Only allow ::1 on lo interface
+        ip6 daddr fe80::/10 iif != lo drop           # Drop IPv6 link-local traffic not from lo
+
+        # Accept any traffic coming from loopback interface
+        iif lo counter accept
+
+        # Drop traffic from IPs in denylist sets
+        ip saddr @denylist drop
+        ip6 saddr @denylist6 drop
+
+        # Limit ICMP echo-request (ping) to avoid DoS abuse
+        icmp type echo-request limit rate 1/second accept
+        icmpv6 type echo-request limit rate 1/second accept
+
+        # SSH protection - allow only from trusted IPs, track attempts
+        ct state new ip saddr @allowed_ips tcp dport 22 counter name cnt_ssh jump BRUTE
+        ct state new ip6 saddr @allowed_ips6 tcp dport 22 counter name cnt_ssh6 jump BRUTE6
+
+        # All other traffic: log and drop
+        jump log_drops
+    }
+
+    chain outcoming {
+        type filter hook output priority filter; policy accept;
+        ct state vmap { established: accept, related: accept, invalid: drop }  # Drop only invalid
+    }
+
+    chain FORWARD {
+        type filter hook forward priority filter; policy drop;
+        ct state vmap { established: accept, related: accept, invalid: drop }
+    }
+}
