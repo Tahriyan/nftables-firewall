@@ -46,7 +46,7 @@ sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup
 
 1. **Clone this repository**:
 ```bash
-git clone https://github.com/Tahriyan/......(add correct URL)
+git clone https://github.com/Tahriyan/nftables-firewall.git
 cd nftables-project
 ```
 
