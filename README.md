@@ -49,3 +49,5 @@ This is open-source and meant to be reused or modified. The goal is to show how 
 
 *Protect your system. Start simple. Use open tools.*
 
+> Work in progress - feedback welcome!
+
