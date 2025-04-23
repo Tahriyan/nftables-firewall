@@ -57,7 +57,7 @@ sudo nft -a list ruleset
 
 3. **Apply your own ruleset:**
 ```bash
-sudo nft -f firewall.nft
+sudo nft -f nftables.conf
 ```
 
 4. **Monitor active rules:**
@@ -72,21 +72,10 @@ nc -wl -vz 127.0.0.1 22
 ```
 Then check updated ruleset and counters.
 
-6. **Make nftables persistent:**
-Edit the config file (for Debian-based):
-```bash
-sudo nano /etc/nftables.conf
-```
-Paste your ruleset or use `include "/path/to/firewall.nft"`
-
-For RedHat-based systems, the file might be:
-```
-/etc/sysconfig/nftables.conf
-```
 
 ---
 
-## 🌐 IPv6 Check
+## 🌐 IPv6 Check and ICMPV6 Recommendations
 
 Check if IPv6 is enabled:
 ```bash
@@ -95,7 +84,23 @@ cat /proc/sys/net/ipv6/conf/all/disable_ipv6
 - `0`: IPv6 is enabled
 - `1`: IPv6 is disabled
 
-Modify nftables rules accordingly.
+If IPv6 is enabled, ensure you allow the essential ICMPv6 types:
+
+```bash
+icmpv6 type {
+    echo-request,
+    echo-reply,
+    destination-unreachable,
+    packet-too-big,
+    time-exceeded,
+    parameter-problem,
+    nd-router-advert,
+    nd-neighbor-solicit,
+    nd-neighbor-advert
+} accept
+```
+These are necessary for the basic functioning of IPv6 (e.g., neighbor discovery, router advertisement, path MTU discovery).
+
 
 ---
 

@@ -43,7 +43,7 @@ This is open-source and meant to be reused or modified. The goal is to show how 
 
 ---
 
-**License**: See [LICENSE.md](./LICENSE.md)
+**License**: See [LICENSE](./LICENSE)
 
 ---
 
